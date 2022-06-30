@@ -12,15 +12,18 @@ import (
 
 // These variables are used by the register assignment
 // algorithm in this file.
+// 本文件中记录了 一些变量, 这些变量用于 寄存器分配算法（ register assignment algorithm ）
 //
 // They should be modified with care (no other reflect code
 // may be executing) and are generally only modified
 // when testing this package.
+// 你应该谨慎又小心地修改它们( 反射功能只有这里一个实现 没有其他的实现 ) ，通常只在测试此包时修改它们。
 //
 // They should never be set higher than their internal/abi
 // constant counterparts, because the system relies on a
 // structure that is at least large enough to hold the
 // registers the system supports.
+// 它们永远不应该设置得比对应的内部/abi常量高，因为系统依赖的结构至少要足够大，以容纳系统支持的寄存器。
 //
 // Currently they're set to zero because using the actual
 // constants will break every part of the toolchain that
@@ -28,7 +31,18 @@ import (
 // that uses text/template). The values that are currently
 // commented out there should be the actual values once
 // we're ready to use the register ABI everywhere.
+// 目前它们被设置为0，因为使用实际的常量将破坏使用反射调用函数的工具链的每个部分(例如go test，或任何使用文本/模板的东西)。
+// 当我们准备在所有地方使用寄存器ABI时，当前注释掉的值应该是实际值。
+
 var (
+	// IntArgRegs is the number of registers dedicated
+	// to passing integer argument values. Result registers are identical
+	// to argument registers, so this number is used for those too.
+	// IntArgRegs是专用于传递整型参数值的寄存器的数量。
+	// 结果寄存器与参数寄存器相同，所以这个数字也用于这些寄存器。
+	// 参考 src/internal/abi/abi_generic.go:29
+	//
+	// 在原始的值的基础上 乘上一个固定的值 这里是 goexperiment.RegabiArgsInt
 	intArgRegs   = abi.IntArgRegs * goexperiment.RegabiArgsInt
 	floatArgRegs = abi.FloatArgRegs * goexperiment.RegabiArgsInt
 	floatRegSize = uintptr(abi.EffectiveFloatRegSize * goexperiment.RegabiArgsInt)
@@ -37,56 +51,64 @@ var (
 // abiStep represents an ABI "instruction." Each instruction
 // describes one part of how to translate between a Go value
 // in memory and a call frame.
+// abiStep表示一条ABI“指令”。 每条指令都描述了如何在内存中的Go值和调用帧之间进行转换的一部分。
 type abiStep struct {
 	kind abiStepKind
 
 	// offset and size together describe a part of a Go value
-	// in memory.
+	// in memory. offset和size一起描述了内存中Go值的一部分。
 	offset uintptr
-	size   uintptr // size in bytes of the part
+	size   uintptr // size in bytes of the part 部件的字节大小
 
-	// These fields describe the ABI side of the translation.
-	stkOff uintptr // stack offset, used if kind == abiStepStack
-	ireg   int     // integer register index, used if kind == abiStepIntReg or kind == abiStepPointer
-	freg   int     // FP register index, used if kind == abiStepFloatReg
+	// These fields describe the ABI side of the translation.  这些字段描述翻译的ABI端。
+	stkOff uintptr // stack offset, used if kind == abiStepStack  堆栈偏移量
+	ireg   int     // integer register index, used if kind == abiStepIntReg or kind == abiStepPointer 整数寄存器索引
+	freg   int     // FP register index, used if kind == abiStepFloatReg FP寄存器指数
 }
 
 // abiStepKind is the "op-code" for an abiStep instruction.
+// abiStepKind是abiStep指令的“操作码”。
 type abiStepKind int
 
 const (
-	abiStepBad      abiStepKind = iota
-	abiStepStack                // copy to/from stack
-	abiStepIntReg               // copy to/from integer register
-	abiStepPointer              // copy pointer to/from integer register
-	abiStepFloatReg             // copy to/from FP register
+	abiStepBad      abiStepKind = iota // 默认值 叫 => bad 坏
+	abiStepStack                // copy to/from stack => 堆栈
+	abiStepIntReg               // copy to/from integer register => 整数
+	abiStepPointer              // copy pointer to/from integer register => 指针
+	abiStepFloatReg             // copy to/from FP register => 浮点数
 )
 
 // abiSeq represents a sequence of ABI instructions for copying
 // from a series of reflect.Values to a call frame (for call arguments)
 // or vice-versa (for call results).
+// abiSeq表示一个ABI指令序列，用于从一系列reflect中复制。值到调用框架(用于调用参数)，反之亦然(用于调用结果)。
 //
 // An abiSeq should be populated by calling its addArg method.
+// abiSeq应该通过调用它的addArg方法来填充。
 type abiSeq struct {
 	// steps is the set of instructions.
+	// 步骤是指令的集合。
 	//
 	// The instructions are grouped together by whole arguments,
 	// with the starting index for the instructions
 	// of the i'th Go value available in valueStart.
+	// 这些指令由整个参数组合在一起，valueStart中提供了第i个Go值的指令的起始索引。
 	//
 	// For instance, if this abiSeq represents 3 arguments
 	// passed to a function, then the 2nd argument's steps
 	// begin at steps[valueStart[1]].
+	// 例如，如果这个abiSeq表示传递给一个函数的3个参数，那么第二个参数的步骤从步骤[valueStart[1]]开始。
 	//
 	// Because reflect accepts Go arguments in distinct
 	// Values and each Value is stored separately, each abiStep
 	// that begins a new argument will have its offset
 	// field == 0.
+	// 因为reflect接受不同的值的Go参数，每个值是单独存储的，每个开始一个新参数的abiStep将有它的偏移字段== 0。
 	steps      []abiStep
 	valueStart []int
 
-	stackBytes   uintptr // stack space used
-	iregs, fregs int     // registers used
+	stackBytes   uintptr // stack space used 栈空间使用
+	iregs, fregs int     // registers used 注册使用
 }
 
 func (a *abiSeq) dump() {
@@ -106,6 +128,7 @@ func (a *abiSeq) dump() {
 // stepsForValue returns the ABI instructions for translating
 // the i'th Go argument or return value represented by this
 // abiSeq to the Go ABI.
+// stepsForValue返回ABI指令，用于将第i个Go参数或由abiSeq表示的返回值转换为Go ABI。
 func (a *abiSeq) stepsForValue(i int) []abiStep {
 	s := a.valueStart[i]
 	var e int
@@ -118,11 +141,14 @@ func (a *abiSeq) stepsForValue(i int) []abiStep {
 }
 
 // addArg extends the abiSeq with a new Go value of type t.
+// addArg将abiSeq扩展为一个新的t类型的Go值。
 //
 // If the value was stack-assigned, returns the single
 // abiStep describing that translation, and nil otherwise.
+// 如果该值是堆栈赋值的，则返回描述该转换的单个abiStep，否则返回nil。
 func (a *abiSeq) addArg(t *rtype) *abiStep {
 	// We'll always be adding a new value, so do that first.
+	// 我们总是会添加一个新值，所以先做这个。
 	pStart := len(a.steps)
 	a.valueStart = append(a.valueStart, pStart)
 	if t.size == 0 {
@@ -134,21 +160,28 @@ func (a *abiSeq) addArg(t *rtype) *abiStep {
 		// So just do that here, but don't bother actually
 		// generating a new ABI step for it (there's nothing to
 		// actually copy).
+		// 如果参数类型的大小为0，那么为了优雅地降级为ABI0，我们需要对该类型进行堆栈赋值。
+		// 原因是，尽管零大小的类型不占用堆栈空间，但它们确实会导致下一个参数被对齐。
+		// 因此，只需在这里这样做，但不必为它实际生成一个新的ABI步骤(实际上没有什么要复制的)。
 		//
 		// We cannot handle this in the recursive case of
 		// regAssign because zero-sized *fields* of a
 		// non-zero-sized struct do not cause it to be
 		// stack-assigned. So we need a special case here
 		// at the top.
+		// 我们无法在regAssign的递归情况下处理这个问题，因为非零大小struct的零大小的*字段*不会导致它被堆栈赋值。
+		// 所以我们需要一个特殊的例子。
 		a.stackBytes = align(a.stackBytes, uintptr(t.align))
 		return nil
 	}
 	// Hold a copy of "a" so that we can roll back if
 	// register assignment fails.
+	// 保存“a”的副本，以便在寄存器赋值失败时进行回滚。
 	aOld := *a
 	if !a.regAssign(t, 0) {
 		// Register assignment failed. Roll back any changes
 		// and stack-assign.
+		// 寄存器分配失败。回滚所有更改和堆栈赋值。
 		*a = aOld
 		a.stackAssign(t.size, uintptr(t.align))
 		return &a.steps[len(a.steps)-1]
@@ -158,12 +191,15 @@ func (a *abiSeq) addArg(t *rtype) *abiStep {
 
 // addRcvr extends the abiSeq with a new method call
 // receiver according to the interface calling convention.
+// addRcvr根据接口调用约定对abiSeq进行了扩展，增加了一个新的方法call receiver。
 //
 // If the receiver was stack-assigned, returns the single
 // abiStep describing that translation, and nil otherwise.
 // Returns true if the receiver is a pointer.
+// 如果接收方是堆栈赋值的，则返回描述转换的abiStep，否则返回nil。如果接收方是指针则返回true。
 func (a *abiSeq) addRcvr(rcvr *rtype) (*abiStep, bool) {
 	// The receiver is always one word.
+	// 接受者总是一个词。
 	a.valueStart = append(a.valueStart, len(a.steps))
 	var ok, ptr bool
 	if ifaceIndir(rcvr) || rcvr.pointers() {
@@ -176,6 +212,10 @@ func (a *abiSeq) addRcvr(rcvr *rtype) (*abiStep, bool) {
 		// in the reflect package which only conditionally added
 		// a pointer bit to the reflect.(Value).Call stack frame's
 		// GC bitmap.
+		// 这种情况可能吗?
+		// 接口数据工作从不包含非指针值。
+		// 这种情况是从reflect包中的旧代码复制过来的，该代码只是有条件地向reflect添加了一个指针位(Value)。
+		// 调用堆栈帧的GC位图。
 		ok = a.assignIntN(0, ptrSize, 1, 0b0)
 		ptr = false
 	}
@@ -195,6 +235,10 @@ func (a *abiSeq) addRcvr(rcvr *rtype) (*abiStep, bool) {
 //
 // This method along with the assign* methods represent the
 // complete register-assignment algorithm for the Go ABI.
+// regAssign尝试为t类型的值保留参数寄存器，存储在某个偏移位置。
+// 无论赋值是否成功，它都会返回，但对a.steps所做的任何更改都会留在后面，
+// 因此，如果赋值失败，调用者必须通过调整a.steps来撤销所做的工作。
+// 这个方法和assign*方法代表了Go ABI的完整寄存器分配算法。
 func (a *abiSeq) regAssign(t *rtype, offset uintptr) bool {
 	switch t.Kind() {
 	case UnsafePointer, Ptr, Chan, Map, Func:
@@ -227,6 +271,7 @@ func (a *abiSeq) regAssign(t *rtype, offset uintptr) bool {
 			// There's nothing to assign, so don't modify
 			// a.steps but succeed so the caller doesn't
 			// try to stack-assign this value.
+			// 没有什么要赋值的，所以不要修改。steps，但是会成功，所以调用者不会尝试堆栈赋值。
 			return true
 		case 1:
 			return a.regAssign(tt.elem, offset)
@@ -253,11 +298,15 @@ func (a *abiSeq) regAssign(t *rtype, offset uintptr) bool {
 // from the data at [offset, offset+n*size) in memory. Each value at
 // [offset+i*size, offset+(i+1)*size) for i < n is assigned to the
 // next n integer registers.
+// assignIntN从内存中的[offset, offset+n*size]为寄存器分配n个值，每个“size”字节为大。
+// 对于i < n，在[offset+i*size, offset+(i+1)*size)处的每个值被分配给下一个n整数寄存器。
 //
 // Bit i in ptrMap indicates whether the i'th value is a pointer.
 // n must be <= 8.
+// ptrMap中的第i位表示第i个值是否为指针。N必须<= 8。返回赋值是否成功。
 //
 // Returns whether assignment succeeded.
+// N必须<= 8。返回赋值是否成功。
 func (a *abiSeq) assignIntN(offset, size uintptr, n int, ptrMap uint8) bool {
 	if n > 8 || n < 0 {
 		panic("invalid n")
@@ -288,8 +337,11 @@ func (a *abiSeq) assignIntN(offset, size uintptr, n int, ptrMap uint8) bool {
 // from the data at [offset, offset+n*size) in memory. Each value at
 // [offset+i*size, offset+(i+1)*size) for i < n is assigned to the
 // next n floating-point registers.
+// assignFloatN从内存中[offset, offset+n*size]的数据向寄存器分配n个值，每个“size”字节为大。
+// 对于i < n， [offset+i*size, offset+(i+1)*size)处的每个值被赋给下一个n个浮点寄存器。
 //
 // Returns whether assignment succeeded.
+// 返回赋值是否成功。
 func (a *abiSeq) assignFloatN(offset, size uintptr, n int) bool {
 	if n < 0 {
 		panic("invalid n")
@@ -313,11 +365,12 @@ func (a *abiSeq) assignFloatN(offset, size uintptr, n int) bool {
 // large with alignment "alignment" to the stack.
 //
 // Should not be called directly; use addArg instead.
+// 为一个大小为“size”字节的值预留空间，并与堆栈对齐。不应直接调用;使用addArg代替。
 func (a *abiSeq) stackAssign(size, alignment uintptr) {
 	a.stackBytes = align(a.stackBytes, alignment)
 	a.steps = append(a.steps, abiStep{
 		kind:   abiStepStack,
-		offset: 0, // Only used for whole arguments, so the memory offset is 0.
+		offset: 0, // Only used for whole arguments, so the memory offset is 0. 只用于整个参数，所以内存偏移量为0。
 		size:   size,
 		stkOff: a.stackBytes,
 	})
@@ -325,9 +378,11 @@ func (a *abiSeq) stackAssign(size, alignment uintptr) {
 }
 
 // abiDesc describes the ABI for a function or method.
+//abiDesc用于描述函数或方法的ABI。
 type abiDesc struct {
 	// call and ret represent the translation steps for
 	// the call and return paths of a Go function.
+	//call和ret表示Go函数的调用路径和返回路径的转换步骤。
 	call, ret abiSeq
 
 	// These fields describe the stack space allocated
@@ -337,6 +392,7 @@ type abiDesc struct {
 	// spill is the size in bytes of additional space reserved
 	// to spill argument registers into in case of preemption in
 	// reflectcall's stack frame.
+	//这些字段描述为调用分配的堆栈空间。stackCallArgsSize是为参数而不是返回值保留的空间量。retOffset是返回值开始的偏移量，而spill是为防止在reflectcall的堆栈帧中被抢占而预留给spill参数寄存器的额外空间(以字节为单位)。
 	stackCallArgsSize, retOffset, spill uintptr
 
 	// stackPtrs is a bitmap that indicates whether
@@ -344,6 +400,7 @@ type abiDesc struct {
 	// args + return values) is a pointer. Used
 	// as the heap pointer bitmap for stack space
 	// passed to reflectcall.
+	//stackPtrs是一个位图，它指示ABI堆栈空间中的每个单词(堆栈赋值参数+返回值)是否为指针。用作传递给反射调用的堆栈空间的堆指针位图。
 	stackPtrs *bitVector
 
 	// inRegPtrs is a bitmap whose i'th bit indicates
@@ -354,6 +411,7 @@ type abiDesc struct {
 	// outRegPtrs is the same, but for result values.
 	// Used by reflectcall to make result pointers visible
 	// to the GC.
+	// inRegPtrs是一个位图，它的第i位表示第i个整数参数寄存器是否包含一个指针。由makeFuncStub和methodValueCall使用，使结果指针对GC可见。outRegPtrs是相同的，但用于结果值。由reflectcall使用，使结果指针对GC可见。
 	inRegPtrs, outRegPtrs abi.IntArgRegBitmap
 }
 
@@ -387,22 +445,28 @@ func dumpPtrBitMap(b abi.IntArgRegBitmap) {
 func newAbiDesc(t *funcType, rcvr *rtype) abiDesc {
 	// We need to add space for this argument to
 	// the frame so that it can spill args into it.
+	// 我们需要在框架中为这个参数添加空间，这样它就可以将参数输入到框架中。
 	//
 	// The size of this space is just the sum of the sizes
 	// of each register-allocated type.
+	// 这个空间的大小就是每个寄存器分配类型的大小之和。
 	//
 	// TODO(mknyszek): Remove this when we no longer have
 	// caller reserved spill space.
+	// TODO(mknyszek):当我们不再有调用者保留溢出空间时，删除这个。
 	spill := uintptr(0)
 
 	// Compute gc program & stack bitmap for stack arguments
+	// 计算gc程序和堆栈参数的堆栈位图
 	stackPtrs := new(bitVector)
 
 	// Compute the stack frame pointer bitmap and register
 	// pointer bitmap for arguments.
+	// 计算参数的堆栈帧指针位图和寄存器指针位图。
 	inRegPtrs := abi.IntArgRegBitmap{}
 
 	// Compute abiSeq for input parameters.
+	// 计算输入参数的abiSeq。
 	var in abiSeq
 	if rcvr != nil {
 		stkStep, isPtr := in.addRcvr(rcvr)
@@ -434,20 +498,25 @@ func newAbiDesc(t *funcType, rcvr *rtype) abiDesc {
 
 	// From the input parameters alone, we now know
 	// the stackCallArgsSize and retOffset.
+	// 仅从输入参数，我们现在就知道了stackCallArgsSize和retOffset。
 	stackCallArgsSize := in.stackBytes
 	retOffset := align(in.stackBytes, ptrSize)
 
 	// Compute the stack frame pointer bitmap and register
 	// pointer bitmap for return values.
+	// 计算堆栈帧指针位图和返回值的寄存器指针位图。
 	outRegPtrs := abi.IntArgRegBitmap{}
 
 	// Compute abiSeq for output parameters.
+	// 计算输出参数的abiSeq。
 	var out abiSeq
 	// Stack-assigned return values do not share
 	// space with arguments like they do with registers,
 	// so we need to inject a stack offset here.
 	// Fake it by artificially extending stackBytes by
 	// the return offset.
+	// 堆栈赋值返回值不像寄存器那样与实参共享空间，因此我们需要在这里注入堆栈偏移量。
+	// 通过人为地通过返回偏移量扩展stackBytes来伪造它。
 	out.stackBytes = retOffset
 	for i, res := range t.out() {
 		stkStep := out.addArg(res)
@@ -463,6 +532,7 @@ func newAbiDesc(t *funcType, rcvr *rtype) abiDesc {
 	}
 	// Undo the faking from earlier so that stackBytes
 	// is accurate.
+	// 撤销之前的伪造，以便stackBytes是准确的。
 	out.stackBytes -= retOffset
 	return abiDesc{in, out, stackCallArgsSize, retOffset, spill, stackPtrs, inRegPtrs, outRegPtrs}
 }
