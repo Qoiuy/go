@@ -11,14 +11,17 @@ import (
 
 // Swapper returns a function that swaps the elements in the provided
 // slice.
+// Swapper返回一个函数，用于交换所提供片中的元素。
 //
 // Swapper panics if the provided interface is not a slice.
+// 如果所提供的接口不是一个片，则交换器会惊慌。
 func Swapper(slice interface{}) func(i, j int) {
 	v := ValueOf(slice)
 	if v.Kind() != Slice {
 		panic(&ValueError{Method: "Swapper", Kind: v.Kind()})
 	}
 	// Fast path for slices of size 0 and 1. Nothing to swap.
+	// 大小为0和1的切片的快速路径。没有交换。
 	switch v.Len() {
 	case 0:
 		return func(i, j int) { panic("reflect: slice index out of range") }
@@ -35,6 +38,7 @@ func Swapper(slice interface{}) func(i, j int) {
 	hasPtr := typ.ptrdata != 0
 
 	// Some common & small cases, without using memmove:
+	// 一些常见和小的情况下，不使用memmove:
 	if hasPtr {
 		if size == ptrSize {
 			ps := *(*[]unsafe.Pointer)(v.ptr)
@@ -62,7 +66,7 @@ func Swapper(slice interface{}) func(i, j int) {
 	}
 
 	s := (*unsafeheader.Slice)(v.ptr)
-	tmp := unsafe_New(typ) // swap scratch space
+	tmp := unsafe_New(typ) // swap scratch space 交换划痕空间
 
 	return func(i, j int) {
 		if uint(i) >= uint(s.Len) || uint(j) >= uint(s.Len) {

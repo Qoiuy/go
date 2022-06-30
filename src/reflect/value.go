@@ -16,32 +16,44 @@ import (
 const ptrSize = 4 << (^uintptr(0) >> 63) // unsafe.Sizeof(uintptr(0)) but an ideal const
 
 // Value is the reflection interface to a Go value.
+// 值是Go值的反射接口。
 //
 // Not all methods apply to all kinds of values. Restrictions,
 // if any, are noted in the documentation for each method.
 // Use the Kind method to find out the kind of value before
 // calling kind-specific methods. Calling a method
 // inappropriate to the kind of type causes a run time panic.
+// 并非所有方法都适用于所有类型的值。 每种方法的文档中都注明了限制条件(如果有的话)。
+// 在调用特定于类型的方法之前，使用Kind方法找出值的类型。 调用不适合类型类型的方法会导致运行时panic。
 //
 // The zero Value represents no value.
 // Its IsValid method returns false, its Kind method returns Invalid,
 // its String method returns "<invalid Value>", and all other methods panic.
 // Most functions and methods never return an invalid value.
 // If one does, its documentation states the conditions explicitly.
+// 零值表示没有值。
+// 它的IsValid方法返回false，它的Kind方法返回Invalid，
+// 它的String方法返回“<无效值>”，所有其他方法都为panic。
+// 大多数函数和方法从不返回无效值。 如果有，它的文档会显式地说明条件。
 //
 // A Value can be used concurrently by multiple goroutines provided that
 // the underlying Go value can be used concurrently for the equivalent
 // direct operations.
+// 一个值可以被多个gor例程并发使用，前提是底层的Go值可以并发地用于等价的直接操作。
 //
 // To compare two Values, compare the results of the Interface method.
 // Using == on two Values does not compare the underlying values
 // they represent.
+// 要比较两个值，请比较Interface方法的结果。对两个value使用==不会比较它们表示的基础值。
 type Value struct {
 	// typ holds the type of the value represented by a Value.
+	// typ保存value所表示的值的类型。
 	typ *rtype
 
 	// Pointer-valued data or, if flagIndir is set, pointer to data.
 	// Valid when either flagIndir is set or typ.pointers() is true.
+	// 指针值数据，如果设置了flagIndir，则指向数据的指针。
+	// 当设置了flagIndir或type .pointer()为真时有效。
 	ptr unsafe.Pointer
 
 	// flag holds metadata about the value.
@@ -56,6 +68,15 @@ type Value struct {
 	// The remaining 23+ bits give a method number for method values.
 	// If flag.kind() != Func, code can assume that flagMethod is unset.
 	// If ifaceIndir(typ), code can assume that flagIndir is set.
+	// 标志保存有关该值的元数据。最低位是标志位:
+	//  — flagStickyRO:通过未导出的未嵌入字段获得，因此是只读的
+	//  — flagEmbedRO:通过未导出的嵌入字段获取，因此是只读的
+	//  — flagIndir: Val保存一个指向数据的指针。
+	//	- flagAddr: v.CanAddr为true(提示为flagIndir)
+	//	- flagMethod: V是一个方法值。
+	//  接下来的5位给出了值的类型。这重复了type.kind()，方法值除外。
+	//  剩下的23+位表示方法值的方法编号。如果flag.kind() != Func，代码可以假定flagMethod未设置。
+	//  如果ifaceIndir(typ)，代码可以假定设置了flagIndir。
 	flag
 
 	// A method value represents a curried method invocation
@@ -63,6 +84,9 @@ type Value struct {
 	// the receiver r, but the flag's Kind bits say Func (methods are
 	// functions), and the top bits of the flag give the method number
 	// in r's type's method table.
+	// 方法值代表一个curry过的方法调用，如r。
+	// read用于接收方r。
+	// typ+val+标志位描述接收方r，但标志的Kind位表示Func(方法是函数)，标志的顶部位给出r类型的方法表中的方法号。
 }
 
 type flag uintptr
@@ -93,6 +117,8 @@ func (f flag) ro() flag {
 // pointer returns the underlying pointer represented by v.
 // v.Kind() must be Ptr, Map, Chan, Func, or UnsafePointer
 // if v.Kind() == Ptr, the base type must not be go:notinheap.
+// 如果v.v.k ind() == Ptr，基类型不能为go:notinheap，
+// 则v.v.k ind()返回的底层指针必须是Ptr、Map、Chan、Func或UnsafePointer。
 func (v Value) pointer() unsafe.Pointer {
 	if v.typ.size != ptrSize || !v.typ.pointers() {
 		panic("can't call pointer on a non-pointer Value")
@@ -104,21 +130,26 @@ func (v Value) pointer() unsafe.Pointer {
 }
 
 // packEface converts v to the empty interface.
+// packEface将v转换为空接口。
 func packEface(v Value) interface{} {
 	t := v.typ
 	var i interface{}
 	e := (*emptyInterface)(unsafe.Pointer(&i))
 	// First, fill in the data portion of the interface.
+	// 首先，填写接口的数据部分。
 	switch {
 	case ifaceIndir(t):
 		if v.flag&flagIndir == 0 {
 			panic("bad indir")
 		}
 		// Value is indirect, and so is the interface we're making.
+		// 价值是间接的，我们所创造的界面也是如此。
 		ptr := v.ptr
 		if v.flag&flagAddr != 0 {
 			// TODO: pass safe boolean from valueInterface so
 			// we don't need to copy if safe==true?
+			// TODO:从valueInterface传递安全布尔值，
+			// 所以我们不需要复制，如果安全==true?
 			c := unsafe_New(t)
 			typedmemmove(t, c, ptr)
 			ptr = c
@@ -127,23 +158,28 @@ func packEface(v Value) interface{} {
 	case v.flag&flagIndir != 0:
 		// Value is indirect, but interface is direct. We need
 		// to load the data at v.ptr into the interface data word.
+		// 价值是间接的，但界面是直接的。我们需要将v.ptr的数据加载到接口数据字中。
 		e.word = *(*unsafe.Pointer)(v.ptr)
 	default:
 		// Value is direct, and so is the interface.
+		// 值是直接的，接口也是。
 		e.word = v.ptr
 	}
 	// Now, fill in the type portion. We're very careful here not
 	// to have any operation between the e.word and e.typ assignments
 	// that would let the garbage collector observe the partially-built
 	// interface value.
+	// 现在，填写类型部分。我们在这里非常小心，不要在e.word和e.typ赋值之间进行任何操作，以免垃圾收集器观察到部分构建的接口值。
 	e.typ = t
 	return i
 }
 
 // unpackEface converts the empty interface i to a Value.
+// unpackEface将空接口i转换为Value。
 func unpackEface(i interface{}) Value {
 	e := (*emptyInterface)(unsafe.Pointer(&i))
 	// NOTE: don't read e.word until we know whether it is really a pointer or not.
+	// 注意:在我们知道e.word是否真的是一个指针之前，不要读它。
 	t := e.typ
 	if t == nil {
 		return Value{}
@@ -158,6 +194,8 @@ func unpackEface(i interface{}) Value {
 // A ValueError occurs when a Value method is invoked on
 // a Value that does not support it. Such cases are documented
 // in the description of each method.
+// 当在不支持Value方法的情况下调用Value方法时，会发生ValueError。
+// 这种情况在每种方法的描述中都有记录。
 type ValueError struct {
 	Method string
 	Kind   Kind
@@ -172,6 +210,7 @@ func (e *ValueError) Error() string {
 
 // methodName returns the name of the calling method,
 // assumed to be two stack frames above.
+// methodName返回调用方法的名称，假设是上面两个堆栈帧。
 func methodName() string {
 	pc, _, _, _ := runtime.Caller(2)
 	f := runtime.FuncForPC(pc)
@@ -183,6 +222,8 @@ func methodName() string {
 
 // methodNameSkip is like methodName, but skips another stack frame.
 // This is a separate function so that reflect.flag.mustBe will be inlined.
+// methodNameSkip类似于methodName，但会跳过另一个堆栈帧。
+// 这是一个单独的函数，因此reflect.flag.mustBe将会内联。
 func methodNameSkip() string {
 	pc, _, _, _ := runtime.Caller(3)
 	f := runtime.FuncForPC(pc)
@@ -193,20 +234,22 @@ func methodNameSkip() string {
 }
 
 // emptyInterface is the header for an interface{} value.
+// emptyInterface是一个接口{}值的头文件。
 type emptyInterface struct {
 	typ  *rtype
 	word unsafe.Pointer
 }
 
 // nonEmptyInterface is the header for an interface value with methods.
+// nonEmptyInterface是带有方法的接口值的头。
 type nonEmptyInterface struct {
-	// see ../runtime/iface.go:/Itab
+	// see ../runtime/iface.go:/Itab 看到 ../runtime/iface.go:/Itab
 	itab *struct {
-		ityp *rtype // static interface type
-		typ  *rtype // dynamic concrete type
-		hash uint32 // copy of typ.hash
+		ityp *rtype // static interface type 静态的接口类型
+		typ  *rtype // dynamic concrete type 动态的具体类型
+		hash uint32 // copy of typ.hash typ.hash副本
 		_    [4]byte
-		fun  [100000]unsafe.Pointer // method table
+		fun  [100000]unsafe.Pointer // method table 方法表
 	}
 	word unsafe.Pointer
 }
@@ -217,8 +260,12 @@ type nonEmptyInterface struct {
 // the very clear v.mustBe(Bool) and have it compile into
 // v.flag.mustBe(Bool), which will only bother to copy the
 // single important word for the receiver.
+// 如果没有f的同类，一定会惊慌失措。
+// 将其作为标记方法而不是Value方法(并将标记嵌入到Value中)意味着我们可以编写非常清晰的v.m mustbe (Bool)，
+// 并将其编译为v.m flag. mustbe (Bool)，它只会为接收方复制单个重要的单词。
 func (f flag) mustBe(expected Kind) {
 	// TODO(mvdan): use f.kind() again once mid-stack inlining gets better
+	// TODO(mvdan):一旦栈中内联变得更好，就再次使用f.kind()
 	if Kind(f&flagKindMask) != expected {
 		panic(&ValueError{methodName(), f.kind()})
 	}
@@ -226,6 +273,7 @@ func (f flag) mustBe(expected Kind) {
 
 // mustBeExported panics if f records that the value was obtained using
 // an unexported field.
+// mustBeExported如果f记录了该值是使用未导出字段获得的，则会出现panic。
 func (f flag) mustBeExported() {
 	if f == 0 || f&flagRO != 0 {
 		f.mustBeExportedSlow()
@@ -244,6 +292,8 @@ func (f flag) mustBeExportedSlow() {
 // mustBeAssignable panics if f records that the value is not assignable,
 // which is to say that either it was obtained using an unexported field
 // or it is not addressable.
+// mustBeAssignable将在f记录该值不可分配的情况下惊慌，也就是说，
+// 该值是使用未导出的字段获得的，或者它是不可寻址的。
 func (f flag) mustBeAssignable() {
 	if f&flagRO != 0 || f&flagAddr == 0 {
 		f.mustBeAssignableSlow()
@@ -255,6 +305,7 @@ func (f flag) mustBeAssignableSlow() {
 		panic(&ValueError{methodNameSkip(), Invalid})
 	}
 	// Assignable if addressable and not read-only.
+	// 如果可寻址且非只读，则可赋值。
 	if f&flagRO != 0 {
 		panic("reflect: " + methodNameSkip() + " using value obtained using unexported field")
 	}
@@ -268,18 +319,22 @@ func (f flag) mustBeAssignableSlow() {
 // Addr is typically used to obtain a pointer to a struct field
 // or slice element in order to call a method that requires a
 // pointer receiver.
+// Addr返回一个表示v.地址的指针值。如果CanAddr()返回false，就会出现恐慌。
+// Addr通常用于获取指向struct字段或slice元素的指针，以便调用需要指针接收器的方法。
 func (v Value) Addr() Value {
 	if v.flag&flagAddr == 0 {
 		panic("reflect.Value.Addr of unaddressable value")
 	}
 	// Preserve flagRO instead of using v.flag.ro() so that
 	// v.Addr().Elem() is equivalent to v (#32772)
+	// 保留flagRO而不是使用v.flag.ro()，以便v. addr ().Elem()等价于v (#32772)
 	fl := v.flag & flagRO
 	return Value{v.typ.ptrTo(), v.ptr, fl | flag(Ptr)}
 }
 
 // Bool returns v's underlying value.
 // It panics if v's kind is not Bool.
+// Bool返回v的基础值。如果v不是Bool类型，它会惊慌。
 func (v Value) Bool() bool {
 	v.mustBe(Bool)
 	return *(*bool)(v.ptr)
@@ -287,23 +342,27 @@ func (v Value) Bool() bool {
 
 // Bytes returns v's underlying value.
 // It panics if v's underlying value is not a slice of bytes.
+// Bytes返回v的底层值。如果v的底层值不是一个字节片，它就会惊慌。
 func (v Value) Bytes() []byte {
 	v.mustBe(Slice)
 	if v.typ.Elem().Kind() != Uint8 {
 		panic("reflect.Value.Bytes of non-byte slice")
 	}
 	// Slice is always bigger than a word; assume flagIndir.
+	// 切片永远大于一个字;假设flagIndir。
 	return *(*[]byte)(v.ptr)
 }
 
 // runes returns v's underlying value.
 // It panics if v's underlying value is not a slice of runes (int32s).
+// Runes返回v的基础值。如果v的基础值不是一块符文(32秒)，它会惊慌。
 func (v Value) runes() []rune {
 	v.mustBe(Slice)
 	if v.typ.Elem().Kind() != Int32 {
 		panic("reflect.Value.Bytes of non-rune slice")
 	}
 	// Slice is always bigger than a word; assume flagIndir.
+	// 切片永远大于一个字;假设flagIndir。
 	return *(*[]rune)(v.ptr)
 }
 
@@ -312,6 +371,9 @@ func (v Value) runes() []rune {
 // an element of a slice, an element of an addressable array,
 // a field of an addressable struct, or the result of dereferencing a pointer.
 // If CanAddr returns false, calling Addr will panic.
+// CanAddr报告是否可以通过Addr获取该值的地址。这样的值称为可寻址的。
+// 如果一个值是片的一个元素，可寻址数组的一个元素，可寻址结构的一个字段，或解引用指针的结果，那么这个值就是可寻址的。
+// 如果CanAddr返回false，调用Addr会引起恐慌。
 func (v Value) CanAddr() bool {
 	return v.flag&flagAddr != 0
 }
@@ -321,6 +383,8 @@ func (v Value) CanAddr() bool {
 // obtained by the use of unexported struct fields.
 // If CanSet returns false, calling Set or any type-specific
 // setter (e.g., SetBool, SetInt) will panic.
+// CanSet报告是否可以修改v的值。只有当值是可寻址的且不是通过使用未导出的结构字段获得时，才可以更改值。
+// 如果CanSet返回false，调用Set或任何类型特定的setter(例如SetBool, SetInt)将会出现panic。
 func (v Value) CanSet() bool {
 	return v.flag&(flagAddr|flagRO) == flagAddr
 }
@@ -333,6 +397,11 @@ func (v Value) CanSet() bool {
 // type of the function's corresponding input parameter.
 // If v is a variadic function, Call creates the variadic slice parameter
 // itself, copying in the corresponding values.
+// 调用输入参数为in的函数v。
+// 例如，如果len(in) == 3, v. call (in)表示Go调用v(in[0]， in[1]， in[2])。
+// 如果v星人不是Func就叫恐慌。它以值的形式返回输出结果。
+// 在Go中，每个输入参数必须可赋值给函数对应的输入参数的类型。
+// 如果v是一个可变参数函数，Call创建可变参数片本身，复制相应的值。
 func (v Value) Call(in []Value) []Value {
 	v.mustBe(Func)
 	v.mustBeExported()
@@ -346,18 +415,21 @@ func (v Value) Call(in []Value) []Value {
 // It returns the output results as Values.
 // As in Go, each input argument must be assignable to the
 // type of the function's corresponding input parameter.
+// CallSlice使用输入参数in调用可变参数函数v，并将[len(in)-1]中的切片赋值给v的最后一个可变参数。
+// 例如，如果len(in) == 3, v. callslice (in)表示Go调用v(in[0]， in[1]， in[2]…)如果v的Kind不是Func或者v不是可变参数，CallSlice将会惊慌。
+// 它以值的形式返回输出结果。在Go中，每个输入参数必须可赋值给函数对应的输入参数的类型。
 func (v Value) CallSlice(in []Value) []Value {
 	v.mustBe(Func)
 	v.mustBeExported()
 	return v.call("CallSlice", in)
 }
 
-var callGC bool // for testing; see TestCallMethodJump and TestCallArgLive
+var callGC bool // for testing; see TestCallMethodJump and TestCallArgLive 进行测试;参见TestCallMethodJump和TestCallArgLive
 
 const debugReflectCall = false
 
 func (v Value) call(op string, in []Value) []Value {
-	// Get function pointer, type.
+	// Get function pointer, type. 获取函数指针、类型。
 	t := (*funcType)(unsafe.Pointer(v.typ))
 	var (
 		fn       unsafe.Pointer
@@ -412,7 +484,7 @@ func (v Value) call(op string, in []Value) []Value {
 		}
 	}
 	if !isSlice && isVariadic {
-		// prepare slice for remaining values
+		// prepare slice for remaining values 为剩余值准备切片
 		m := len(in) - n
 		slice := MakeSlice(t.In(n), m, m)
 		elem := t.In(n).Elem()
@@ -435,13 +507,13 @@ func (v Value) call(op string, in []Value) []Value {
 	}
 	nout := t.NumOut()
 
-	// Register argument space.
+	// Register argument space. 注册参数空间。
 	var regArgs abi.RegArgs
 
-	// Compute frame type.
+	// Compute frame type. 计算帧类型。
 	frametype, framePool, abi := funcLayout(t, rcvrtype)
 
-	// Allocate a chunk of memory for frame if needed.
+	// Allocate a chunk of memory for frame if needed. 如果需要，为帧分配一块内存。
 	var stackArgs unsafe.Pointer
 	if frametype.size != 0 {
 		if nout == 0 {
@@ -449,6 +521,7 @@ func (v Value) call(op string, in []Value) []Value {
 		} else {
 			// Can't use pool if the function has return values.
 			// We will leak pointer to args in ret, so its lifetime is not scoped.
+			// 如果函数有返回值，就不能使用池。我们将在ret中泄漏指向args的指针，因此它的生存期没有作用域。
 			stackArgs = unsafe_New(frametype)
 		}
 	}
@@ -460,13 +533,16 @@ func (v Value) call(op string, in []Value) []Value {
 	}
 
 	// Copy inputs into args.
+	// 将输入复制到args中。
 
 	// Handle receiver.
+	// 处理接收机。
 	inStart := 0
 	if rcvrtype != nil {
 		// Guaranteed to only be one word in size,
 		// so it will only take up exactly 1 abiStep (either
 		// in a register or on the stack).
+		// 保证只有一个字的大小，所以它将只占用1 abiStep(在寄存器或堆栈上)。
 		switch st := abi.call.steps[0]; st.kind {
 		case abiStepStack:
 			storeRcvr(rcvr, stackArgs)
@@ -475,6 +551,8 @@ func (v Value) call(op string, in []Value) []Value {
 			// they'll be kept alive by the Values referenced by
 			// this frame. Reflection forces these to be heap-allocated,
 			// so we don't need to worry about stack copying.
+			// 甚至指针也可以进入uintptr插槽，因为它们会被帧引用的值保持活跃性。
+			// 反射强制将它们分配到堆中，因此我们不需要担心堆栈复制。
 			storeRcvr(rcvr, unsafe.Pointer(&regArgs.Ints[st.ireg]))
 		case abiStepFloatReg:
 			storeRcvr(rcvr, unsafe.Pointer(&regArgs.Floats[st.freg]))
@@ -485,18 +563,21 @@ func (v Value) call(op string, in []Value) []Value {
 	}
 
 	// Handle arguments.
+	// 处理参数。
 	for i, v := range in {
 		v.mustBeExported()
 		targ := t.In(i).(*rtype)
 		// TODO(mknyszek): Figure out if it's possible to get some
 		// scratch space for this assignment check. Previously, it
 		// was possible to use space in the argument frame.
+		// TODO(mknyszek):弄清楚是否有可能为这个作业检查获得一些临时空间。以前，可以在论证框架中使用空间。
 		v = v.assignTo("reflect.Value.Call", targ, nil)
 	stepsLoop:
 		for _, st := range abi.call.stepsForValue(i + inStart) {
 			switch st.kind {
 			case abiStepStack:
 				// Copy values to the "stack."
+				// 将值复制到“堆栈”
 				addr := add(stackArgs, st.stkOff, "precomputed stack arg offset")
 				if v.flag&flagIndir != 0 {
 					typedmemmove(targ, addr, v.ptr)
@@ -504,15 +585,18 @@ func (v Value) call(op string, in []Value) []Value {
 					*(*unsafe.Pointer)(addr) = v.ptr
 				}
 				// There's only one step for a stack-allocated value.
+				// 对于堆栈分配的值，只有一个步骤。
 				break stepsLoop
 			case abiStepIntReg, abiStepPointer:
 				// Copy values to "integer registers."
+				// 将值复制到“整数寄存器”。
 				if v.flag&flagIndir != 0 {
 					offset := add(v.ptr, st.offset, "precomputed value offset")
 					if st.kind == abiStepPointer {
 						// Duplicate this pointer in the pointer area of the
 						// register space. Otherwise, there's the potential for
 						// this to be the last reference to v.ptr.
+						// 在寄存器空间的指针区域复制该指针。否则，这可能是v.ptr的最后一个引用。
 						regArgs.Ptrs[st.ireg] = *(*unsafe.Pointer)(offset)
 					}
 					memmove(unsafe.Pointer(&regArgs.Ints[st.ireg]), offset, st.size)
