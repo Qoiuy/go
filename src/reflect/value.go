@@ -603,12 +603,14 @@ func (v Value) call(op string, in []Value) []Value {
 				} else {
 					if st.kind == abiStepPointer {
 						// See the comment in abiStepPointer case above.
+						//参见上面abiStepPointer案例中的注释。
 						regArgs.Ptrs[st.ireg] = v.ptr
 					}
 					regArgs.Ints[st.ireg] = uintptr(v.ptr)
 				}
 			case abiStepFloatReg:
 				// Copy values to "float registers."
+				// 将值复制到“浮点寄存器”
 				if v.flag&flagIndir == 0 {
 					panic("attempted to copy pointer to FP register")
 				}
@@ -621,10 +623,12 @@ func (v Value) call(op string, in []Value) []Value {
 	}
 	// TODO(mknyszek): Remove this when we no longer have
 	// caller reserved spill space.
+	// TODO(mknyszek):当我们不再有这个时，删除它
 	frameSize = align(frameSize, ptrSize)
 	frameSize += abi.spill
 
 	// Mark pointers in registers for the return path.
+	// 在寄存器中标记返回路径的指针。
 	regArgs.ReturnIsPtr = abi.outRegPtrs
 
 	if debugReflectCall {
@@ -632,14 +636,16 @@ func (v Value) call(op string, in []Value) []Value {
 	}
 
 	// For testing; see TestCallArgLive.
+	// 进行测试;看到TestCallArgLive。
 	if callGC {
 		runtime.GC()
 	}
 
-	// Call.
+	// Call. 调用。
 	call(frametype, fn, stackArgs, uint32(frametype.size), uint32(abi.retOffset), uint32(frameSize), &regArgs)
 
 	// For testing; see TestCallMethodJump.
+	// 进行测试;看到TestCallMethodJump。
 	if callGC {
 		runtime.GC()
 	}
@@ -653,6 +659,7 @@ func (v Value) call(op string, in []Value) []Value {
 	} else {
 		if stackArgs != nil {
 			// Zero the now unused input area of args,
+			// 零现在未使用的参数输入区域，
 			// because the Values returned by this function contain pointers to the args object,
 			// and will thus keep the args object alive indefinitely.
 			typedmemclrpartial(frametype, stackArgs, 0, abi.retOffset)
