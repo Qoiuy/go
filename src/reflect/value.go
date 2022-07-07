@@ -662,16 +662,19 @@ func (v Value) call(op string, in []Value) []Value {
 			// 零现在未使用的参数输入区域，
 			// because the Values returned by this function contain pointers to the args object,
 			// and will thus keep the args object alive indefinitely.
+			// 因为此函数返回的值包含指向args对象的指针，因此将使args对象无限期地存活
 			typedmemclrpartial(frametype, stackArgs, 0, abi.retOffset)
 		}
 
 		// Wrap Values around return values in args.
+		// 将返回值封装在args中 o
 		ret = make([]Value, nout)
 		for i := 0; i < nout; i++ {
 			tv := t.Out(i)
 			if tv.Size() == 0 {
 				// For zero-sized return value, args+off may point to the next object.
 				// In this case, return the zero value instead.
+				// 对于零大小的返回值，args+off可能指向下一个对象 在这种情况下，返回0值
 				ret[i] = Zero(tv)
 				continue
 			}
@@ -680,19 +683,25 @@ func (v Value) call(op string, in []Value) []Value {
 				// This value is on the stack. If part of a value is stack
 				// allocated, the entire value is according to the ABI. So
 				// just make an indirection into the allocated frame.
+				// 这个值在堆栈上 如果堆栈分配了一个值的一部分，那么整个值是根据ABI分配的
+				// 所以在分配的坐标系中做一个间接的操作
 				fl := flagIndir | flag(tv.Kind())
 				ret[i] = Value{tv.common(), add(stackArgs, st.stkOff, "tv.Size() != 0"), fl}
 				// Note: this does introduce false sharing between results -
 				// if any result is live, they are all live.
 				// (And the space for the args is live as well, but as we've
 				// cleared that space it isn't as big a deal.)
+				// 注意:这引入了错误的结果之间的共享-如果任何结果是活的，它们都是活的
+				// (游戏邦注:args的空间也很活跃，但因为我们已经清理了空间，所以这并不是什么大问题 )
 				continue
 			}
 
 			// Handle pointers passed in registers.
+			// 处理寄存器中传递的指针
 			if !ifaceIndir(tv.common()) {
 				// Pointer-valued data gets put directly
 				// into v.ptr.
+				// 指针值数据被直接放入v.ptr
 				if steps[0].kind != abiStepPointer {
 					print("kind=", steps[0].kind, ", type=", tv.String(), "\n")
 					panic("mismatch between ABI description and types")
@@ -703,6 +712,7 @@ func (v Value) call(op string, in []Value) []Value {
 
 			// All that's left is values passed in registers that we need to
 			// create space for and copy values back into.
+			// 剩下的就是在寄存器中传递的值，我们需要为这些值创建空间并将值复制回去
 			//
 			// TODO(mknyszek): We make a new allocation for each register-allocated
 			// value, but previously we could always point into the heap-allocated
@@ -710,6 +720,9 @@ func (v Value) call(op string, in []Value) []Value {
 			// additional space to the allocated stack frame and storing the
 			// register-allocated return values into the allocated stack frame and
 			// referring there in the resulting Value.
+			// TODO(mknyszek):我们为每个寄存器分配的值进行新的分配，但以前我们总是可以指向堆分配的堆栈帧
+			// 这是一种可以通过向已分配的堆栈帧添加额外空间并将寄存器分配的返回值存储到已分配的堆栈帧并在结果值中引用那里来修复的回归
+			// s: = unsafe_New (tv.common ()
 			s := unsafe_New(tv.common())
 			for _, st := range steps {
 				switch st.kind {
@@ -741,6 +754,7 @@ func (v Value) call(op string, in []Value) []Value {
 // into a call of a function with a concrete argument frame, while
 // callReflect converts a call of a function with a concrete argument
 // frame into a call using Values.
+//
 // It is in this file so that it can be next to the call method above.
 // The remainder of the MakeFunc implementation is in makefunc.go.
 //
@@ -755,6 +769,18 @@ func (v Value) call(op string, in []Value) []Value {
 //
 // regs contains the argument values passed in registers and will contain
 // the values returned from ctxt.fn in registers.
+// 注意:此函数必须在生成的代码中标记为“包装器”，以便链接器可以使其在恐慌和恢复时正常工作
+// gc编译器知道对名称“reflect.callReflect”这样做
+// ctext是由MakeFunc生成的“闭包” Frame是指向堆栈上那个闭包的参数的指针
+// retValid指向一个布尔值，该值应该在设置帧的结果部分时设置
+// Regs包含在寄存器中传递的参数值，并将包含从ctext返回的值
+// fn在寄存器中 
+// 注意:此函数必须在生成的代码中标记为“包装器”，以便链接器可以使其在恐慌和恢复时正常工作
+// gc编译器知道对名称“reflect.callReflect”这样做
+// ctext是由MakeFunc生成的“闭包” Frame是指向堆栈上那个闭包的参数的指针
+// retValid指向一个布尔值，该值应该在设置帧的结果部分时设置
+// Regs包含在寄存器中传递的参数值，并将包含从ctext返回的值
+// fn在寄存器中 
 func callReflect(ctxt *makeFuncImpl, frame unsafe.Pointer, retValid *bool, regs *abi.RegArgs) {
 	if callGC {
 		// Call GC upon entry during testing.
@@ -762,6 +788,7 @@ func callReflect(ctxt *makeFuncImpl, frame unsafe.Pointer, retValid *bool, regs 
 		// our caller (makeFuncStub) could have failed to place the last
 		// pointer to a value in regs' pointer space, in which case it
 		// won't be visible to the GC.
+		// 在测试期间进入时调用GC 在这里扫描堆栈是最大的危险，因为我们的调用者(makeFuncStub)可能没有将最后一个指向值的指针放在regs的指针空间中，在这种情况下，它对GC是不可见的
 		runtime.GC()
 	}
 	ftyp := ctxt.ftyp
@@ -770,6 +797,7 @@ func callReflect(ctxt *makeFuncImpl, frame unsafe.Pointer, retValid *bool, regs 
 	_, _, abi := funcLayout(ftyp, nil)
 
 	// Copy arguments into Values.
+	// 将参数复制到Values中 
 	ptr := frame
 	in := make([]Value, 0, int(ftyp.inCount))
 	for i, typ := range ftyp.in() {
@@ -785,6 +813,7 @@ func callReflect(ctxt *makeFuncImpl, frame unsafe.Pointer, retValid *bool, regs 
 				// Must make a copy, because f might keep a reference to it,
 				// and we cannot let f keep a reference to the stack frame
 				// after this function returns, not even a read-only reference.
+				// 值不能内联在接口数据中 必须创建一个副本，因为f可能会保留对它的引用，并且在函数返回后不能让f保留对堆栈帧的引用，即使是只读引用也不行
 				v.ptr = unsafe_New(typ)
 				if typ.size > 0 {
 					typedmemmove(typ, v.ptr, add(ptr, st.stkOff, "typ.size > 0"))
@@ -797,6 +826,7 @@ func callReflect(ctxt *makeFuncImpl, frame unsafe.Pointer, retValid *bool, regs 
 			if ifaceIndir(typ) {
 				// All that's left is values passed in registers that we need to
 				// create space for the values.
+				// 剩下的就是在寄存器中传递的值，我们需要为这些值创建空间
 				v.flag |= flagIndir
 				v.ptr = unsafe_New(typ)
 				for _, st := range steps {
@@ -819,6 +849,7 @@ func callReflect(ctxt *makeFuncImpl, frame unsafe.Pointer, retValid *bool, regs 
 			} else {
 				// Pointer-valued data gets put directly
 				// into v.ptr.
+				// // 指针值数据被直接放入v.ptr 
 				if steps[0].kind != abiStepPointer {
 					print("kind=", steps[0].kind, ", type=", typ.String(), "\n")
 					panic("mismatch between ABI description and types")
@@ -830,6 +861,7 @@ func callReflect(ctxt *makeFuncImpl, frame unsafe.Pointer, retValid *bool, regs 
 	}
 
 	// Call underlying function.
+	// 调用底层函数 
 	out := f(in)
 	numOut := ftyp.NumOut()
 	if len(out) != numOut {
@@ -837,6 +869,7 @@ func callReflect(ctxt *makeFuncImpl, frame unsafe.Pointer, retValid *bool, regs 
 	}
 
 	// Copy results back into argument frame and register space.
+	// 将结果复制回参数框架和寄存器空间 
 	if numOut > 0 {
 		for i, typ := range ftyp.out() {
 			v := out[i]
@@ -866,12 +899,18 @@ func callReflect(ctxt *makeFuncImpl, frame unsafe.Pointer, retValid *bool, regs 
 			// We must clear the destination before calling assignTo,
 			// in case assignTo writes (with memory barriers) to the
 			// target location used as scratch space. See issue 39541.
+			// 如果v在语言规范中可赋值给t类型的变量，则将v转换为typ类型
+			// 参见第28761 
+			// TODO(mknyszek):在切换到寄存器ABI的过程中，我们在这里失去了寄存器案例(以及所有案例的临时scratch空间)
+			// 如果/当这种情况发生时，请注意以下事项:我们必须在调用assignTo之前清除目标，以防assignTo将(带内存屏障)写入用作scratch空间的目标位置
+// 看到发行39541 
 			v = v.assignTo("reflect.MakeFunc", typ, nil)
 		stepsLoop:
 			for _, st := range abi.ret.stepsForValue(i) {
 				switch st.kind {
 				case abiStepStack:
 					// Copy values to the "stack."
+					// 将值复制到“堆栈” 将值复制到“堆栈”
 					addr := add(ptr, st.stkOff, "precomputed stack arg offset")
 					// Do not use write barriers. The stack space used
 					// for this call is not adequately zeroed, and we
