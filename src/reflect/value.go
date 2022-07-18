@@ -2921,16 +2921,16 @@ func Select(cases []SelectCase) (chosen int, recv Value, recvOK bool) {
 	// NOTE: Do not trust that caller is not modifying cases data underfoot.
 	// The range is safe because the caller cannot modify our copy of the len
 	// and each iteration makes its own copy of the value c.
-// 注意:不要相信调用者没有修改案例数据
-// range是安全的，因为调用者不能修改len的副本，而且每次迭代都有自己的值c的副本
+	// 注意:不要相信调用者没有修改案例数据
+	// range是安全的，因为调用者不能修改len的副本，而且每次迭代都有自己的值c的副本
 	var runcases []runtimeSelect
 	if len(cases) > 4 {
 		// Slice is heap allocated due to runtime dependent capacity.
-// 由于与运行时相关的容量，片被堆分配
+		// 由于与运行时相关的容量，片被堆分配
 		runcases = make([]runtimeSelect, len(cases))
 	} else {
 		// Slice can be stack allocated due to constant capacity.
-// 由于容量不变，片可以堆栈分配
+		// 由于容量不变，片可以堆栈分配
 		runcases = make([]runtimeSelect, len(cases), 4)
 	}
 
@@ -3104,8 +3104,8 @@ func ValueOf(i interface{}) Value {
 	// For now we make the contents always escape to the heap. It
 	// makes life easier in a few places (see chanrecv/mapassign
 	// comment below).
-// 要做的事情:可能允许Value的内容存在于堆栈中
-// 现在，我们让内容总是转义到堆 它使生活在一些地方更容易(见下面的chanrecv/mapassign评论)
+	// 要做的事情:可能允许Value的内容存在于堆栈中
+	// 现在，我们让内容总是转义到堆 它使生活在一些地方更容易(见下面的chanrecv/mapassign评论)
 	escapes(i)
 
 	return unpackEface(i)
@@ -3156,7 +3156,7 @@ func New(typ Type) Value {
 	pt := t.ptrTo()
 	if ifaceIndir(pt) {
 		// This is a pointer to a go:notinheap type.
-// 这是一个指向go:notinheap类型的指针
+		// 这是一个指向go:notinheap类型的指针
 		panic("reflect: New of type that may not be allocated in heap (possibly undefined cgo C type)")
 	}
 	ptr := unsafe_New(t)
@@ -3189,7 +3189,7 @@ func (v Value) assignTo(context string, dst *rtype, target unsafe.Pointer) Value
 	case directlyAssignable(dst, v.typ):
 		// Overwrite type so that they match.
 		// Same memory layout, so no harm done.
-// 覆盖类型以使它们匹配 相同的内存布局，所以没有造成伤害
+		// 覆盖类型以使它们匹配 相同的内存布局，所以没有造成伤害
 		fl := v.flag&(flagAddr|flagIndir) | v.flag.ro()
 		fl |= flag(dst.Kind())
 		return Value{dst, v.ptr, fl}
@@ -3202,8 +3202,8 @@ func (v Value) assignTo(context string, dst *rtype, target unsafe.Pointer) Value
 			// A nil ReadWriter passed to nil Reader is OK,
 			// but using ifaceE2I below will panic.
 			// Avoid the panic by returning a nil dst (e.g., Reader) explicitly.
-// 将一个nil ReadWriter传递给nil Reader是可以的，但使用下面的ifaceE2I会造成混乱
-// 通过显式返回一个nil dst(例如Reader)来避免恐慌
+			// 将一个nil ReadWriter传递给nil Reader是可以的，但使用下面的ifaceE2I会造成混乱
+			// 通过显式返回一个nil dst(例如Reader)来避免恐慌
 			return Value{dst, nil, flag(Interface)}
 		}
 		x := valueInterface(v, false)
@@ -3245,7 +3245,7 @@ func (v Value) CanConvert(t Type) bool {
 	// Currently the only conversion that is OK in terms of type
 	// but that can panic depending on the value is converting
 	// from slice to pointer-to-array.
-// 目前唯一的转换是可以的类型，但可以恐慌取决于值是从片转换到指针数组
+	// 目前唯一的转换是可以的类型，但可以恐慌取决于值是从片转换到指针数组
 	if vt.Kind() == Slice && t.Kind() == Ptr && t.Elem().Kind() == Array {
 		n := t.Elem().Len()
 		h := (*unsafeheader.Slice)(v.ptr)
@@ -3330,13 +3330,13 @@ func convertOp(dst, src *rtype) func(Value, Type) Value {
 	}
 
 	// dst and src have same underlying type.
-// DST和SRC具有相同的基础类型
+	// DST和SRC具有相同的基础类型
 	if haveIdenticalUnderlyingType(dst, src, false) {
 		return cvtDirect
 	}
 
 	// dst and src are non-defined pointer types with same underlying base type.
-// DST和SRC是具有相同基础基类型的非定义指针类型
+	// DST和SRC是具有相同基础基类型的非定义指针类型
 	if dst.Kind() == Ptr && dst.Name() == "" &&
 		src.Kind() == Ptr && src.Name() == "" &&
 		haveIdenticalUnderlyingType(dst.Elem().common(), src.Elem().common(), false) {
@@ -3474,9 +3474,9 @@ func cvtFloat(v Value, t Type) Value {
 		// Don't do any conversion if both types have underlying type float32.
 		// This avoids converting to float64 and back, which will
 		// convert a signaling NaN to a quiet NaN. See issue 36400.
-// 如果两种类型的基础类型都是float32，则不要进行任何转换
-// 这避免了转换到float64和返回，这将把一个信号NaN转换为一个安静的NaN
-// 看到发行36400
+		// 如果两种类型的基础类型都是float32，则不要进行任何转换
+		// 这避免了转换到float64和返回，这将把一个信号NaN转换为一个安静的NaN
+		// 看到发行36400
 		return makeFloat32(v.flag.ro(), *(*float32)(v.ptr), t)
 	}
 	return makeFloat(v.flag.ro(), v.Float(), t)
@@ -3542,7 +3542,7 @@ func cvtDirect(v Value, typ Type) Value {
 	ptr := v.ptr
 	if f&flagAddr != 0 {
 		// indirect, mutable word - make a copy
-// 间接的，可变的词-复制
+		// 间接的，可变的词-复制
 		c := unsafe_New(t)
 		typedmemmove(t, c, ptr)
 		ptr = c
