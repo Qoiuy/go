@@ -437,7 +437,7 @@ const (
 )
 
 // arrayType represents a fixed array type.
-// arrayType表示固定的数组类型
+// arrayType 表示固定的数组类型
 type arrayType struct {
 	rtype
 	elem  *rtype // array element type
@@ -715,6 +715,8 @@ type Method struct {
 	// method name. It is empty for upper case (exported) method names.
 	// The combination of PkgPath and Name uniquely identifies a method
 	// in a method set.
+	// PkgPath是包路径，它限定了小写(未导出)的方法名
+	// 对于大写的(导出的)方法名，它是空的 PkgPath和Name的组合唯一地标识方法集中的一个方法
 	// See https://golang.org/ref/spec#Uniqueness_of_identifiers
 	PkgPath string
 
