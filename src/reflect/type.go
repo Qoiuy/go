@@ -419,10 +419,10 @@ type method struct {
 // uncommonType只出现在已定义类型或带有方法的类型中(如果T是已定义类型，T和*T的uncommonTypes有方法)
 // 使用指向此结构的指针可以减少描述没有方法的非定义类型所需的总体大小
 type uncommonType struct {
-	pkgPath nameOff // import path; empty for built-in types like int, string
-	mcount  uint16  // number of methods
-	xcount  uint16  // number of exported methods
-	moff    uint32  // offset from this uncommontype to [mcount]method
+	pkgPath nameOff // import path; empty for built-in types like int, string // 进口路径;对于内置类型如int、string为空
+	mcount  uint16  // number of methods // 数量的方法
+	xcount  uint16  // number of exported methods // 导出的方法个数
+	moff    uint32  // offset from this uncommontype to [mcount]method  // //从[mcount]方法的偏移量
 	_       uint32  // unused
 }
 
