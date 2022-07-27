@@ -847,6 +847,7 @@ type nameOff int32 // offset to a name
 type typeOff int32 // offset to an *rtype
 type textOff int32 // offset from top of text section
 
+// 因为要使用 runtime 包实现代码 所以才这样写的
 func (t *rtype) nameOff(off nameOff) name {
 	return name{(*byte)(resolveNameOff(unsafe.Pointer(t), int32(off)))}
 }
