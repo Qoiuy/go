@@ -4,36 +4,34 @@ Rob Pike 6 September 2011
 
 ## Introduction
 
-Reflection in computing is the ability of a program to examine its own structure, particularly through types; it’s a
-form of metaprogramming. It’s also a great source of confusion.
-<font face="黑体" size =1>计算中的反射是程序检查其自身结构的能力，特别是通过类型(它是元编程的一种形式) </font>
-<font face="黑体" size =1>这也是造成困惑的一大原因 </font>
+Reflection in computing is the ability of a program to examine its own structure, particularly through types; it’s a form of metaprogramming. It’s also a great source of confusion.
 
-In this article we attempt to clarify things by explaining how reflection works in Go. Each language’s reflection model
-is different (and many languages don’t support it at all), but this article is about Go, so for the rest of this article
-the word “reflection” should be taken to mean “reflection in Go”.
-<font face="黑体" size =1> 在这篇文章中，我们试图通过解释反射在围棋中的工作原理来澄清一些事情 </font>
-<font face="黑体" size =1> 每种语言的反射模型都是不同的(而且许多语言根本不支持它)，但是本文是关于Go的，所以在本文的其余部分，“反射”一词应该被理解为“Go中的反射”</font>
+In this article we attempt to clarify things by explaining how reflection works in Go. Each language’s reflection model is different (and many languages don’t support it at all), but this article is about Go, so for the rest of this article the word “reflection” should be taken to mean “reflection in Go”.
 
 Note added January 2022: This blog post was written in 2011 and predates parametric polymorphism (a.k.a. generics)
 in Go. Although nothing important in the article has become incorrect as a result of that development in the language,
 it has been tweaked in a few places to avoid confusing someone familiar with modern Go.
+
+<font face="黑体" size =1>计算中的反射是程序检查其自身结构的能力，特别是通过类型(它是元编程的一种形式) 这也是造成困惑的一大原因 </font>
+<font face="黑体" size =1> 在这篇文章中，我们试图通过解释反射在围棋中的工作原理来澄清一些事情  每种语言的反射模型都是不同的(而且许多语言根本不支持它)，但是本文是关于Go的，所以在本文的其余部分，“反射”一词应该被理解为“Go中的反射”</font>
 <font face="黑体" size =1> 注:这篇博客写于2011年，早于参数多态性(又称参数多态性)</font>
 <font face="黑体" size =1> 泛型) 尽管由于语言的发展，文章中没有什么重要的内容变得不正确，但还是在一些地方进行了调整，以避免让熟悉现代围棋的人感到困惑</font>
 
 ## Types and interfaces 复习一下Go中的类型
 
 Because reflection builds on the type system, let’s start with a refresher about types in Go.
-<font face="黑体" size =1>因为反射建立在类型系统之上，所以让我们先来复习一下Go中的类型</font>
 
 Go is statically typed. Every variable has a static type, that is, exactly one type known and fixed at compile
 time: `int`, `float32`, `*MyType`, `[]byte`, and so on.
+
+<font face="黑体" size =1>因为反射建立在类型系统之上，所以让我们先来复习一下Go中的类型</font>
 <font face="黑体" size =1> Go是静态类型的 每个变量都有一个静态类型，也就是说，只有一个在编译时已知并固定的类型: int, float32, *MyType, []byte 等等 </font>
 
 If we declare
+
 <font face="黑体" size =1> 如果我们声明</font>
 
-```
+```go
 type MyInt int
 
 var i int
@@ -45,17 +43,16 @@ they have the same underlying type, they cannot be assigned to one another witho
 <font face="黑体" size =1> 然后i的类型是int j的类型是 MyInt </font>
 <font face="黑体" size =1> 变量i和j具有不同的静态类型，尽管它们具有相同的基础类型，但在没有转换的情况下不能相互赋值 </font>
 
-One important category of type is interface types, which represent fixed sets of methods. (When discussing reflection,
-we can ignore the use of interface definitions as constraints within polymorphic code.)
-An interface variable can store any concrete (non-interface) value as long as that value implements the interface’s
-methods. A well-known pair of examples is `io.Reader` and `io.Writer`, the types `Reader`
-and `Writer` from the [io package]():</font>
-<font face="黑体" size =1> 接口类型是类型的一个重要类别，它表示固定的方法集 </font>
-<font face="黑体" size =1>  (在讨论反射时，我们可以忽略在多态代码中使用接口定义作为约束 ) </font>
+One important category of type is interface types, which represent fixed sets of methods. (When discussing reflection, we can ignore the use of interface definitions as constraints within polymorphic code.)
+
+An interface variable can store any concrete (non-interface) value as long as that value implements the interface’s methods. 
+
+A well-known pair of examples is `io.Reader` and `io.Writer`, the types `Reader` and `Writer` from the io package
+<font face="黑体" size =1> 接口类型是类型的一个重要类别，它表示固定的方法集    (在讨论反射时，我们可以忽略在多态代码中使用接口定义作为约束 ) </font>
 <font face="黑体" size =1> 接口变量可以存储任何具体(非接口)值，只要该值实现了接口的方法 </font>
 <font face="黑体" size =1> 一个典型的例子是来自io包的 io.Reader , io.Writer,Reader和Writer:</font>
 
-```
+```go
 // Reader is the interface that wraps the basic Read method.
 type Reader interface {
     Read(p []byte) (n int, err error)
@@ -68,12 +65,10 @@ type Writer interface {
 ```
 
 Any type that implements a `Read` (or `Write`) method with this signature is said to implement `io.Reader`
-(or `io.Writer`). For the purposes of this discussion, that means that a variable of type `io.Reader` can hold any value
-whose type has a `Read` method:
-<font face="黑体" size =1> 任何实现具有此签名的 Read (或Write)方法的类型都被称为实现io.Reader(或io.Writer) </font>
-<font face="黑体" size =1> 对于本文的讨论，这意味着io.Reader类型的变量 可以保存实现了Read方法的任何值:</font>
+(or `io.Writer`). For the purposes of this discussion, that means that a variable of type `io.Reader` can hold any value whose type has a `Read` method:
+<font face="黑体" size =1> 任何实现具有此签名的 Read (或Write)方法的类型都被称为实现io.Reader(或io.Writer)  对于本文的讨论，这意味着io.Reader类型的变量 可以保存实现了Read方法的任何值:</font>
 
-```
+```go
 var r io.Reader
 r = os.Stdin
 r = bufio.NewReader(r)
@@ -81,48 +76,50 @@ r = new(bytes.Buffer)
 // and so on
 ```
 
-It’s important to be clear that whatever concrete value `r` may hold, `r`’s type is always `io.Reader`: Go is statically
-typed and the static type of `r` is `io.Reader`.
-<font face="黑体" size =1> 很重要的一点是，不管具体的值是什么，它的类型总是:Go是静态类型，而的静态类型是</font>
+It’s important to be clear that whatever concrete value `r` may hold, `r`’s type is always `io.Reader`: Go is statically typed and the static type of `r` is `io.Reader`.
+<font face="黑体" size =1> 需要明确的是，不管 `r` 可能包含什么具体值，`r` 的类型始终是 `io.Reader`：Go 是静态类型的语言，而 `r` 的静态类型是 `io.Reader`</font>
 
 An extremely important example of an interface type is the empty interface:
 <font face="黑体" size =1> 一个非常重要的接口类型的例子是空接口:</font>
 
-```
+```go
 interface{}
 ```
 
-or its equivalent alias, <font face="黑体" size =1> 或者它的别名，</font>
+or its equivalent alias, 
 
-```
+<font face="黑体" size =1> 或者它的别名，</font>
+
+```go
 any
 ```
 
 It represents the empty set of methods and is satisfied by any value at all, since every value has zero or more methods.
 <font face="黑体" size =1> 它表示空的方法集，可以满足任何值，因为每个值都有0个或多个方法</font>
 
-Some people say that Go’s interfaces are dynamically typed, but that is misleading. They are statically typed:
-a variable of interface type always has the same static type, and even though at run time the value stored in the
-interface variable may change type, that value will always satisfy the interface. <font face="黑体" size =1>
-有人说Go的接口是动态类型的，但这是误导 // 它们是静态类型的:</font>
-接口类型的变量总是具有相同的静态类型，即使在运行时存储在接口变量中的值可能改变类型，该值始终满足接口
+Some people say that Go’s interfaces are dynamically typed, but that is misleading. They are statically typed: 
+
+a variable of interface type always has the same static type, and even though at run time the value stored in the interface variable may change type, that value will always satisfy the interface.
+
+ <font face="黑体" size =1>有人说Go的接口是动态类型的，但这会产生误导 它们是静态类型的:</font>
+ <font face="黑体" size =1>接口类型的变量总是具有相同的静态类型，即使在运行时存储在接口变量中的值可能会更改类型,该值始终满足接口的要求</font>
 
 We need to be precise about all this because reflection and interfaces are closely
-related. <font face="黑体" size =1></font>
-因为反射和接口是密切相关的，所以我们需要精确地处理所有这些问题
+related. 
+<font face="黑体" size =1>因为反射和接口是密切相关的，所以我们需要精确地处理所有这些问题</font>
 
-## The representation of an interface
+## The representation of an interface 
 
-Russ Cox has written
-a [detailed blog post](https:<font face="黑体" size =1>research.swtch.com/2009/12/go-data-structures-interfaces.html)</font>
-about the representation of interface values in Go. It’s not necessary to repeat the full story here, but a simplified
-summary is in order. <font face="黑体" size =1> Russ Cox写了一篇[详细的博客文章]()关于Go中接口值的表示 // 在这里没有必要重复整个故事，但可以做一个简单的总结</font>
+<font face="黑体" size =1>接口的表示</font>
+
+Russ Cox has written a detailed blog post about the representation of interface values in Go. 
+
+It’s not necessary to repeat the full story here, but a simplified summary is in order.
+<font face="黑体" size =1> Russ Cox写了一篇[详细的博客文章]()关于Go中接口值的阐述接口值的表示，为了简洁，这里不再完整地复述其内容。</font>
 
 A variable of interface type stores a pair: the concrete value assigned to the variable, and that value’s type
-descriptor. To be more precise, the value is the underlying concrete data item that implements the interface and the
-type describes the full type of that item. For instance, after <font face="黑体" size =1> 接口类型的变量存储一对:
-分配给该变量的具体值，以及该值的类型描述符 //</font>
-更准确地说，值是实现接口的底层具体数据项，类型描述该项的完整类型 <font face="黑体" size =1> 例如,后</font>
+descriptor. To be more precise, the value is the underlying concrete data item that implements the interface and the type describes the full type of that item. For instance, after
+<font face="黑体" size =1>接口类型的变量存储了一对值：分配给该变量的具体值，以及该值的类型描述。更确切地说，该值是实现接口的基础具体数据项，而类型描述了该数据项的完整类型。例如</font>
 
 ```
 var r io.Reader
@@ -136,6 +133,7 @@ r = tty
 `r` contains, schematically, the (value, type) pair, (`tty`, `*os.File`). Notice that the type `*os.File`
 implements methods other than `Read`; even though the interface value provides access only to the `Read`
 method, the value inside carries all the type information about that value. That’s why we can do things like this:
+<font face="黑体" size =1> r 中包含 (value, type) 对，即（tty, *os.File）。请注意，类型 *os.File 实现的方法不只有 Read；尽管接口仅提供对 Read 方法的访问，但是其内部的值仍包含有关该值的所有类型信息。这就是为什么我们可以做下面的事情：</font>
 
 ```
 var w io.Writer
@@ -592,5 +590,4 @@ There’s plenty more to reflection that we haven’t covered — sending and re
 slices and maps, calling methods and functions — but this post is long enough. We’ll cover some of those topics in a
 later article. <font face="黑体" size =1> 还有很多我们没有涉及到的反思——通过通道发送和接收、分配内存、使用切片和映射、调用方法和函数——但这篇文章足够长了 //
 我们将在后面的文章中介绍其中的一些主题</font>
-
 
