@@ -7,6 +7,7 @@
 package sort
 
 // Auto-generated variant of sort.go:insertionSort
+// 自动生成sort.go的变体:insertionSort
 func insertionSort_func(data lessSwap, a, b int) {
 	for i := a + 1; i < b; i++ {
 		for j := i; j > a && data.Less(j, j-1); j-- {
@@ -16,6 +17,7 @@ func insertionSort_func(data lessSwap, a, b int) {
 }
 
 // Auto-generated variant of sort.go:siftDown
+// 自动生成的变种sort.go:siftDown
 func siftDown_func(data lessSwap, lo, hi, first int) {
 	root := lo
 	for {
@@ -35,6 +37,7 @@ func siftDown_func(data lessSwap, lo, hi, first int) {
 }
 
 // Auto-generated variant of sort.go:heapSort
+// 自动生成sort.go的变体:heapSort
 func heapSort_func(data lessSwap, a, b int) {
 	first := a
 	lo := 0
@@ -49,6 +52,7 @@ func heapSort_func(data lessSwap, a, b int) {
 }
 
 // Auto-generated variant of sort.go:medianOfThree
+// 自动生成的变种sort.go:medianOfThree
 func medianOfThree_func(data lessSwap, m1, m0, m2 int) {
 	if data.Less(m1, m0) {
 		data.Swap(m1, m0)
@@ -62,6 +66,7 @@ func medianOfThree_func(data lessSwap, m1, m0, m2 int) {
 }
 
 // Auto-generated variant of sort.go:swapRange
+// 自动生成sort.go:swapRange的变体
 func swapRange_func(data lessSwap, a, b, n int) {
 	for i := 0; i < n; i++ {
 		data.Swap(a+i, b+i)
@@ -69,6 +74,7 @@ func swapRange_func(data lessSwap, a, b, n int) {
 }
 
 // Auto-generated variant of sort.go:doPivot
+// 自动生成的变体 go:doPivot
 func doPivot_func(data lessSwap, lo, hi int) (midlo, midhi int) {
 	m := int(uint(lo+hi) >> 1)
 	if hi-lo > 40 {
@@ -133,6 +139,7 @@ func doPivot_func(data lessSwap, lo, hi int) (midlo, midhi int) {
 }
 
 // Auto-generated variant of sort.go:quickSort
+// 自动生成的sort go:quickSort
 func quickSort_func(data lessSwap, a, b, maxDepth int) {
 	for b-a > 12 {
 		if maxDepth == 0 {
@@ -160,6 +167,7 @@ func quickSort_func(data lessSwap, a, b, maxDepth int) {
 }
 
 // Auto-generated variant of sort.go:stable
+// 自动生成的变种sort.go:稳定
 func stable_func(data lessSwap, n int) {
 	blockSize := 20
 	a, b := 0, blockSize
@@ -184,6 +192,7 @@ func stable_func(data lessSwap, n int) {
 }
 
 // Auto-generated variant of sort.go:symMerge
+// 自动生成sort.go:symMerge的变体
 func symMerge_func(data lessSwap, a, m, b int) {
 	if m-a == 1 {
 		i := m
@@ -249,6 +258,7 @@ func symMerge_func(data lessSwap, a, m, b int) {
 }
 
 // Auto-generated variant of sort.go:rotate
+// 自动生成的sort go:rotate
 func rotate_func(data lessSwap, a, m, b int) {
 	i := m - a
 	j := b - m
